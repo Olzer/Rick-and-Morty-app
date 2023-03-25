@@ -1,13 +1,37 @@
 import UIKit
 
+protocol RMCharacterListViewViewModelDelegate: AnyObject {
+    func didLoaadInitialCharacters()
+}
+
 final class RMCharacterListViewViewModel: NSObject {
     
-    func fectchChraracters() {
-        RMService.share.execute(.listCharactersRequest, expecting: RMGetAllCharactersResponse.self) { result in
+    public weak var delegate: RMCharacterListViewViewModelDelegate?
+    
+    private var characters: [RMCharacter] = [] {
+        didSet {
+            for character in characters {
+                let viewModel = RMCharacterCollectionViewCellViewModel(
+                    characterName: character.name,
+                    characterStatus: character.status,
+                    characterImageURL: URL(string: character.image)
+                )
+                cellViewModels.append(viewModel)
+            }
+        }
+    }
+    
+    private var cellViewModels: [RMCharacterCollectionViewCellViewModel] = []
+    
+    public func fectchChraracters() {
+        RMService.share.execute(.listCharactersRequest, expecting: RMGetAllCharactersResponse.self) { [weak self] result in
             switch result {
-            case .success(let model):
-                print("Example image url: "+String(model.results.first?.image ?? "No image"))
-                print("Page result count: "+String(model.results.count))
+            case .success(let responseModel):
+                let result = responseModel.results
+                self?.characters = result
+                DispatchQueue.main.async {
+                    self?.delegate?.didLoaadInitialCharacters()
+                }
             case .failure(let error):
                 String(describing: error)
                 print(String(describing: error))
@@ -18,17 +42,14 @@ final class RMCharacterListViewViewModel: NSObject {
 
 extension RMCharacterListViewViewModel: UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return 20
+        return cellViewModels.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: RMCharacterCollectionViewCell.cellIndentifier, for: indexPath) as? RMCharacterCollectionViewCell else {
             fatalError("Unsupported Cell")
         }
-        let viewModel = RMCharacterCollectionViewCellViewModel(characterName: "Oleh",
-                                                               characterStatus: .alive,
-                                                               characterImageURL: URL(string: "https://rickandmortyapi.com/api/character/avatar/1.jpeg"))
-        cell.configure(with: viewModel)
+        cell.configure(with: cellViewModels[indexPath.row])
         
         return cell
     }
